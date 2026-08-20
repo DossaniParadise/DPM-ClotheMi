@@ -1,0 +1,1054 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="format-detection" content="telephone=no, address=no, email=no">
+<title>ClotheMi · Shirt Sizes</title>
+<meta name="description" content="Assign and track shirt sizes for everyone in DPM FindMi.">
+<meta name="robots" content="noindex, nofollow">
+
+<meta name="apple-mobile-web-app-title" content="ClotheMi">
+<meta name="application-name" content="ClotheMi">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#251d7f">
+
+<!-- ======================================================================
+  ClotheMi — shirt size roster
+  Names are pulled live from the same API that powers DPM FindMi, so this app
+  never stores a roster of its own. It only stores SIZES, keyed by the FindMi
+  record id, in this browser's local storage.
+
+    vps               -> Support Staff
+    directors         -> DOs
+    repairTechnicians -> Repair Technicians
+    areaCoaches       -> District Managers
+    restaurants[].storeManager -> Store Managers  (key: "sm:<restaurantId>")
+
+  If a person is removed in FindMi, their saved size stays parked in storage
+  (harmless) and simply stops appearing. If they come back, so does the size.
+====================================================================== -->
+<style>
+/* ---- Fonts: same family as FindMi / MatchMi (Cinzel wordmark, Mulish body) ---- */
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;700&family=Mulish:ital,wght@0,400;0,600;0,700;0,800;1,400&display=swap');
+
+:root{
+  --navy:#251d7f; --navy-deep:#14104a; --navy-soft:#eceafd;
+  --red:#e8091b; --red-soft:#ffe0e3;
+  --done:#0e7a44; --done-soft:#e2f4ea;
+  --flag:#b45309; --flag-soft:#fdf0dd;
+  --coral:#ff5d6c;
+  --paper:#f4f5fa; --card:#ffffff;
+  --ink:#1a2033; --muted:#5b6478; --line:#e3e6f0;
+  --radius:10px;
+  --shadow:0 1px 2px rgba(20,16,74,.06), 0 8px 24px rgba(20,16,74,.07);
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  font-family:'Mulish',system-ui,sans-serif; background:var(--paper); color:var(--ink);
+  font-size:14px; line-height:1.45; -webkit-font-smoothing:antialiased;
+}
+button{font:inherit; cursor:pointer}
+input,select{font:inherit; color:var(--ink)}
+:focus-visible{outline:2px solid var(--navy); outline-offset:2px}
+@media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important} }
+
+/* ============================= Top bar ============================= */
+.topbar{
+  background:linear-gradient(180deg,var(--navy-deep),var(--navy));
+  color:#fff; padding:10px 18px; display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+}
+.brand{display:flex; align-items:center; gap:9px; min-width:0}
+.wordmark{
+  font-family:'Cinzel',serif; font-weight:700; font-size:1.12rem; letter-spacing:.13em;
+  display:flex; align-items:center; white-space:nowrap;
+}
+.wordmark .mi{color:var(--coral)}
+/* The T of ClotheMi is a t-shirt. Sized in em so it tracks the wordmark. */
+.tee{
+  width:1.14em; height:1.14em; display:inline-block; vertical-align:-.2em;
+  margin:0 .02em; flex:none;
+}
+.tee path{fill:#fff}
+.tee .collar{fill:var(--navy-deep)}
+.tag{
+  font-family:'Mulish'; font-weight:700; letter-spacing:.02em; opacity:.75;
+  margin-left:10px; font-size:.7rem; text-transform:uppercase; white-space:nowrap;
+}
+@media (max-width:620px){
+  .wordmark{font-size:.95rem} .tag{display:none}
+  .topbar{padding:10px 12px; gap:8px} .topbar .wide{display:none}
+  .tb-btn{padding:6px 10px}
+}
+.topbar .spacer{flex:1}
+.conn{display:flex; align-items:center; gap:6px; font-size:.72rem; opacity:.9; white-space:nowrap}
+.conn .dot{width:8px;height:8px;border-radius:50%;background:#f6c34a}
+.conn.ok .dot{background:#3ddc84}
+.conn.err .dot{background:var(--coral)}
+.tb-btn{
+  background:rgba(255,255,255,.12); color:#fff; border:1px solid rgba(255,255,255,.25);
+  border-radius:8px; padding:6px 12px; font-weight:700; font-size:.78rem;
+}
+.tb-btn:hover{background:rgba(255,255,255,.22)}
+.tb-btn:disabled{opacity:.45; cursor:default}
+
+/* ===================== Group rail (the five menus) ===================== */
+.rail{display:flex; gap:6px; padding:12px 18px 4px; overflow-x:auto}
+.gchip{
+  position:relative; flex:1; min-width:118px; border:1px solid var(--line); border-radius:9px;
+  background:var(--card); padding:7px 9px 9px; text-align:left; overflow:hidden;
+  transition:border-color .12s, box-shadow .12s;
+}
+.gchip .fill{position:absolute; inset:auto 0 0 0; height:3px; background:var(--line)}
+.gchip .fill i{display:block; height:100%; background:var(--done); width:0; transition:width .18s}
+.gchip b{display:block; font-size:.78rem; letter-spacing:.02em}
+.gchip .nums{font-size:.68rem; color:var(--muted); font-variant-numeric:tabular-nums}
+.gchip .left{
+  position:absolute; top:6px; right:6px; background:var(--red); color:#fff; border-radius:999px;
+  font-size:.62rem; font-weight:800; padding:1px 6px; font-variant-numeric:tabular-nums;
+}
+.gchip .left.zero{background:var(--done)}
+.gchip .left.none{background:var(--line); color:var(--muted)}
+.gchip:hover{border-color:var(--navy)}
+.gchip.sel{border-color:var(--navy); box-shadow:0 0 0 2px var(--navy-soft), var(--shadow)}
+
+/* ============================= Toolbar ============================= */
+.toolbar{display:flex; gap:8px; align-items:center; padding:10px 18px; flex-wrap:wrap}
+.toolbar input[type=search]{
+  flex:1; min-width:170px; border:1px solid var(--line); border-radius:8px; padding:8px 12px; background:var(--card);
+}
+.toolbar select{border:1px solid var(--line); border-radius:8px; padding:8px 10px; background:var(--card); max-width:190px}
+.summary{
+  margin:0 18px 10px; background:var(--card); border:1px solid var(--line); border-radius:var(--radius);
+  padding:10px 14px; display:flex; gap:18px; align-items:baseline; flex-wrap:wrap; box-shadow:var(--shadow);
+}
+.summary b{font-size:1.15rem; font-variant-numeric:tabular-nums}
+.summary .lbl{font-size:.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; font-weight:700}
+.summary .left b{color:var(--red)} .summary .left.done b{color:var(--done)} .summary .ok b{color:var(--done)}
+.summary .bar{flex:1; min-width:120px; height:6px; border-radius:99px; background:var(--line); overflow:hidden}
+.summary .bar i{display:block;height:100%;background:var(--done); transition:width .18s}
+
+/* ============================= Layout ============================= */
+.main{display:flex; gap:14px; padding:0 18px 48px; align-items:flex-start}
+.grid-wrap{flex:1; min-width:0; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden}
+.table-scroll{overflow-x:auto}
+table.grid{width:100%; border-collapse:collapse; min-width:660px}
+.grid th{
+  text-align:left; font-size:.66rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted);
+  padding:9px 12px; border-bottom:1px solid var(--line); background:#fafbfe; position:sticky; top:0; z-index:2;
+}
+.grid td{padding:7px 12px; border-bottom:1px solid var(--line); vertical-align:middle}
+.grid tr:hover td{background:#f7f8fd}
+.who{font-weight:700}
+.sub{font-size:.76rem; color:var(--muted)}
+.pill{font-size:.62rem; font-weight:800; border-radius:5px; padding:1px 6px; background:var(--navy-soft); color:var(--navy-deep); letter-spacing:.04em; margin-left:6px}
+.note-in{
+  width:100%; min-width:120px; border:1px solid transparent; border-radius:7px; padding:5px 8px;
+  background:transparent; font-size:.8rem; color:var(--muted);
+}
+.note-in:hover{border-color:var(--line)}
+.note-in:focus{border-color:var(--navy); background:#fff; color:var(--ink)}
+.col-size{width:1%; white-space:nowrap}
+.col-note{width:34%}
+
+/* Size chooser */
+.sizes{display:flex; gap:4px; align-items:center; flex-wrap:nowrap}
+.sizes button{
+  border:1.5px solid var(--line); background:#fff; border-radius:7px; min-width:36px; padding:5px 4px;
+  font-weight:800; font-size:.74rem; color:var(--muted); transition:all .1s; font-variant-numeric:tabular-nums;
+}
+.sizes button:hover{border-color:var(--navy); color:var(--navy)}
+.sizes button.on{background:var(--navy); border-color:var(--navy); color:#fff}
+.sizes .clr{min-width:28px; color:var(--muted); font-weight:700}
+.sizes .clr:hover{border-color:var(--red); color:var(--red)}
+
+/* Tally panel — the thing you actually take to the printer */
+.side{width:236px; flex:none; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:12px}
+.side h3{margin:0 0 2px; font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted)}
+.side .hint{font-size:.68rem; color:var(--muted); margin-bottom:9px}
+.side table{width:100%; border-collapse:collapse; font-size:.82rem}
+.side td{padding:5px 2px; border-bottom:1px dashed var(--line); font-variant-numeric:tabular-nums}
+.side td.n{text-align:right; font-weight:800}
+.side .barcell{width:52%; padding-left:8px}
+.side .minibar{display:block; height:6px; border-radius:99px; background:var(--navy-soft); overflow:hidden}
+.side .minibar i{display:block; height:100%; background:var(--navy)}
+.side tr.none td{color:var(--muted)}
+.side tr.none td.n{color:var(--red)}
+.side .foot{margin-top:10px; padding-top:9px; border-top:1px solid var(--line); font-size:.75rem; color:var(--muted); display:flex; justify-content:space-between}
+.side .foot b{color:var(--ink); font-variant-numeric:tabular-nums}
+@media (max-width:1040px){ .side{display:none} }
+
+.empty{padding:38px 18px; text-align:center; color:var(--muted)}
+.empty b{display:block; color:var(--ink); font-size:.95rem; margin-bottom:4px}
+
+/* Narrow screens: a table can't hold a name, nine size buttons and a note
+   without clipping something, so each person becomes a stacked card. */
+@media (max-width:760px){
+  .main{padding:0 12px 48px}
+  .toolbar{padding:10px 12px} .rail{padding:12px 12px 4px} .summary{margin:0 12px 10px}
+  .table-scroll{overflow-x:visible}
+  table.grid{min-width:0}
+  .grid thead{display:none}
+  .grid tbody,.grid tr,.grid td{display:block; width:auto}
+  .grid tr{padding:11px 13px 12px; border-bottom:1px solid var(--line)}
+  .grid tr:last-child{border-bottom:0}
+  .grid tr:hover td{background:transparent}
+  .grid td{padding:0; border-bottom:0}
+  .grid td.col-size{margin-top:9px; width:auto}
+  .grid td.col-note{margin-top:8px; width:auto}
+  .sizes{flex-wrap:wrap; gap:6px}
+  .sizes button{flex:1 1 44px; min-width:44px; padding:8px 4px}
+  .sizes .clr{flex:0 0 44px}
+  .note-in{border-color:var(--line); background:#fff; padding:8px 10px}
+}
+
+/* ============================= Modals ============================= */
+.overlay{position:fixed; inset:0; background:rgba(20,16,74,.45); display:none; z-index:50}
+.overlay.open{display:flex; align-items:flex-start; justify-content:center; padding:40px 14px; overflow:auto}
+.modal{background:#fff; border-radius:14px; box-shadow:var(--shadow); width:100%; max-width:560px; padding:20px}
+.modal h2{margin:0 0 4px; font-size:1.05rem}
+.modal .sub-t{color:var(--muted); font-size:.8rem; margin-bottom:14px}
+.modal label{display:block; font-size:.7rem; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin:12px 0 4px}
+.modal select, .modal input[type=file]{width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 12px; background:#fff}
+.actions{display:flex; gap:8px; justify-content:flex-end; margin-top:18px; flex-wrap:wrap}
+.btn{border-radius:8px; border:1px solid var(--line); background:#fff; padding:8px 16px; font-weight:700}
+.btn.primary{background:var(--navy); border-color:var(--navy); color:#fff}
+.btn.primary:hover{background:var(--navy-deep)}
+.btn.danger{color:var(--red); border-color:var(--red-soft)}
+.btn:disabled{opacity:.5; cursor:default}
+.checklist{max-height:220px; overflow:auto; border:1px solid var(--line); border-radius:8px; padding:6px 10px; margin-top:4px}
+.checklist label{display:flex; gap:8px; align-items:center; font-size:.84rem; font-weight:400; text-transform:none; letter-spacing:0; color:var(--ink); margin:6px 0}
+.note{background:var(--navy-soft); border-radius:8px; padding:10px 12px; font-size:.78rem; color:var(--navy-deep); margin-top:12px}
+.note ul{margin:6px 0 0; padding-left:18px}
+.warn{background:var(--flag-soft); color:#7c3d05; border-radius:8px; padding:10px 12px; font-size:.78rem; margin-top:12px}
+
+/* Toast */
+.toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(14px);
+  background:var(--navy-deep); color:#fff; padding:10px 18px; border-radius:999px;
+  font-size:.82rem; font-weight:700; box-shadow:var(--shadow); opacity:0; pointer-events:none;
+  transition:opacity .18s, transform .18s; z-index:80; max-width:90vw; text-align:center;
+}
+.toast.show{opacity:1; transform:translateX(-50%) translateY(0)}
+</style>
+</head>
+<body>
+
+<!-- ============================= Top bar ============================= -->
+<header class="topbar">
+  <div class="brand">
+    <span class="wordmark" aria-label="ClotheMi">Clo<svg class="tee" viewBox="0 0 100 100" aria-hidden="true"><path d="M31 7 L17 13 L4 31 L19 43 L27 34 L27 94 L73 94 L73 34 L81 43 L96 31 L83 13 L69 7 L64 9 Q50 21 36 9 Z"/><path class="collar" d="M36 9 Q50 21 64 9 Q50 31 36 9 Z"/></svg>he<span class="mi">Mi</span></span>
+    <span class="tag">Shirt Sizes</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="conn" id="conn"><span class="dot"></span><span id="connText" class="wide">Loading roster…</span></div>
+  <button class="tb-btn" onclick="loadRoster()">Refresh<span class="wide"> names</span></button>
+  <button class="tb-btn" onclick="openExport()">Export<span class="wide"> .xlsx</span></button>
+  <button class="tb-btn" onclick="openImport()">Import<span class="wide"> .xlsx</span></button>
+</header>
+
+<!-- ===================== The five menus ===================== -->
+<nav class="rail" id="rail" aria-label="Groups"></nav>
+
+<!-- ============================= Toolbar ============================= -->
+<div class="toolbar">
+  <input type="search" id="search" placeholder="Search a name…" oninput="setSearch(this.value)" aria-label="Search names">
+  <select id="filterSize" onchange="setSizeFilter(this.value)" aria-label="Filter by size">
+    <option value="">Everyone</option>
+    <option value="__none">No size yet</option>
+    <option value="__set">Has a size</option>
+  </select>
+  <button class="btn" onclick="openBulk()">Set several at once</button>
+</div>
+
+<div class="summary" id="summary"></div>
+
+<!-- ============================= Layout ============================= -->
+<main class="main">
+  <div class="grid-wrap">
+    <div class="table-scroll">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th>Name</th>
+            <th class="col-size">Shirt size</th>
+            <th class="col-note">Note</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+    <div class="empty" id="empty" style="display:none"></div>
+  </div>
+
+  <aside class="side">
+    <h3>Order sheet</h3>
+    <div class="hint" id="tallyScope">Counts for the group you're viewing.</div>
+    <table id="tally"></table>
+    <div class="foot"><span>Shirts to order</span><b id="tallyTotal">0</b></div>
+  </aside>
+</main>
+
+<!-- ============================= Export ============================= -->
+<div class="overlay" id="exportOverlay" onclick="if(event.target===this)closeModal('exportOverlay')">
+  <div class="modal">
+    <h2>Export shirt sizes</h2>
+    <div class="sub-t">One sheet per group, plus a totals sheet you can hand to the printer.</div>
+    <label>Groups to include</label>
+    <div class="checklist" id="exportGroups"></div>
+    <label style="margin-top:14px">Rows</label>
+    <select id="exportScope">
+      <option value="all">Everyone</option>
+      <option value="set">Only people with a size</option>
+      <option value="none">Only people still missing a size</option>
+    </select>
+    <div class="note">
+      Keep the <b>Key</b> column if you plan to edit the file and import it back — that's how ClotheMi matches a row to a person.
+    </div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal('exportOverlay')">Cancel</button>
+      <button class="btn primary" id="exportGo" onclick="runExport()">Download .xlsx</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= Import ============================= -->
+<div class="overlay" id="importOverlay" onclick="if(event.target===this)closeModal('importOverlay')">
+  <div class="modal">
+    <h2>Import shirt sizes</h2>
+    <div class="sub-t">Reads every sheet in the workbook and updates sizes in this browser.</div>
+    <label>Excel file</label>
+    <input type="file" id="importFile" accept=".xlsx,.xls,.csv" onchange="previewImport()">
+    <div class="note">
+      <b>What the file needs</b>
+      <ul>
+        <li>A <b>Size</b> column, and either a <b>Key</b> column or a <b>Name</b> column.</li>
+        <li>Sizes accepted: XS, S, M, L, XL, 2XL–5XL (XXL and XXXL work too).</li>
+        <li>A blank size clears that person. A <b>Note</b> column is picked up if present.</li>
+      </ul>
+    </div>
+    <div id="importReport" style="display:none"></div>
+    <div class="actions">
+      <button class="btn" onclick="closeModal('importOverlay')">Cancel</button>
+      <button class="btn primary" id="importGo" onclick="runImport()" disabled>Apply sizes</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= Bulk assign ============================= -->
+<div class="overlay" id="bulkOverlay" onclick="if(event.target===this)closeModal('bulkOverlay')">
+  <div class="modal" style="max-width:480px">
+    <h2>Set several at once</h2>
+    <div class="sub-t" id="bulkScope"></div>
+    <label>Give everyone shown this size</label>
+    <select id="bulkSize"></select>
+    <label style="margin-top:14px">Who it applies to</label>
+    <select id="bulkWho">
+      <option value="none">Only people without a size yet</option>
+      <option value="all">Everyone shown, overwriting sizes already set</option>
+    </select>
+    <div class="actions">
+      <button class="btn" onclick="closeModal('bulkOverlay')">Cancel</button>
+      <button class="btn primary" onclick="runBulk()">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================= Reset ============================= -->
+<div style="padding:0 18px 34px; color:var(--muted); font-size:.74rem; display:flex; gap:14px; align-items:center; flex-wrap:wrap">
+  <span id="storageNote">Sizes save to FindMi and sync to everyone.</span>
+  <button class="btn danger" style="padding:5px 12px; font-size:.74rem" onclick="clearAll()">Clear all sizes</button>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+/* ====================================================================
+   1. Roster source — the same endpoint DPM FindMi reads.
+   ==================================================================== */
+const API_BASE_URL = "https://alignment-api-khaki.vercel.app/api/dpm-alignment";
+const API_PASSWORD = "dpm6";                 // same write key FindMi's client carries
+const SYNC_NODE    = "admins/shirtSizes";    // sibling of admins/techMeta — FindMi never rewrites it
+const STORE_KEY    = "clothemi.sizes.v1";
+const PENDING_KEY  = "clothemi.pending.v1";
+const POLL_MS      = 60000;
+
+/* Keys are "staff:v1" locally. Colons are legal in a JSON key but not worth
+   betting the sync on, so they travel as "~" inside the API path. */
+function remoteKey(k){ return String(k).replace(/:/g, "~"); }
+function localKey(rk){ return String(rk).replace(/~/g, ":"); }
+
+const SIZES = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+
+/* Order here is the order of the five menus across the rail. */
+const GROUPS = [
+  { id:"staff",   label:"Support Staff",       node:"vps" },
+  { id:"do",      label:"DOs",                 node:"directors" },
+  { id:"tech",    label:"Repair Technicians",  node:"repairTechnicians" },
+  { id:"dm",      label:"District Managers",   node:"areaCoaches" },
+  { id:"sm",      label:"Store Managers",      node:"restaurants" }
+];
+
+/* ====================================================================
+   2. Local cache — the app stays usable with no network. The server is the
+      shared truth; localStorage is a mirror plus an outbox of writes that
+      haven't landed yet.
+   ==================================================================== */
+const store = (function(){
+  let ok = true;
+  try { const k="__ct"; localStorage.setItem(k,"1"); localStorage.removeItem(k); }
+  catch(e){ ok = false; }
+  const mem = {};
+  return {
+    persistent: ok,
+    read(key){
+      if (!ok) return mem[key] ? JSON.parse(mem[key]) : {};
+      try { return JSON.parse(localStorage.getItem(key) || "{}"); }
+      catch(e){ return {}; }
+    },
+    write(key, obj){
+      const s = JSON.stringify(obj);
+      if (!ok) { mem[key] = s; return; }
+      try { localStorage.setItem(key, s); }
+      catch(e){ toast("Couldn't cache locally — this browser's storage is full."); }
+    }
+  };
+})();
+
+/* sizes[key] = { size, note, at }. An entry with empty size AND note is a
+   deletion: it has to survive as a record so the clearing wins the
+   last-write-wins race against another device that still has a size. */
+let sizes   = store.read(STORE_KEY);
+let pending = store.read(PENDING_KEY);   // { key: at-value queued for push }
+
+function saveSizes(){ store.write(STORE_KEY, sizes); }
+function savePending(){ store.write(PENDING_KEY, pending); }
+function pendingCount(){ return Object.keys(pending).length; }
+function filledCount(){ return Object.keys(sizes).filter(k => sizes[k] && (sizes[k].size || sizes[k].note)).length; }
+
+/* ====================================================================
+   3. State
+   ==================================================================== */
+let raw = null;                    // last API payload
+let people = [];                   // flattened roster
+let activeGroup = "staff";
+let search = "";
+let sizeFilter = "";
+let apiOk = null;                  // null = not tried yet
+let pushing = false;
+let pushError = null;
+
+/* ====================================================================
+   4. Load + flatten the roster, and merge in everyone else's sizes
+   ==================================================================== */
+async function loadRoster(opts){
+  const silent = !!(opts && opts.silent);
+  if (!silent) renderSync("Loading…");
+  let data;
+  try {
+    const bust = (API_BASE_URL.includes("?") ? "&" : "?") + "_=" + Date.now();
+    const res = await fetch(API_BASE_URL + bust, { cache:"no-store" });
+    if (!res.ok) throw new Error("API " + res.status);
+    data = await res.json();
+  } catch (err) {
+    console.error(err);
+    apiOk = false;
+    renderSync();
+    if (!people.length) {
+      document.getElementById("rows").innerHTML = "";
+      showEmpty("Can't reach FindMi", "Check your connection, then press Refresh. Sizes you've entered are held on this device and will upload once you're back.");
+    }
+    return;
+  }
+  apiOk = true;
+  raw = data;
+  buildPeople();
+
+  const pulled = mergeRemote((data.admins && data.admins.shirtSizes) || {});
+  renderAll();
+  if (pendingCount()) scheduleFlush(0);
+  if (pulled && silent) toast(`${pulled} size${pulled === 1 ? "" : "s"} updated from another device.`);
+}
+
+/* Last write wins, per person, on the `at` timestamp. A local entry the
+   server has never seen — or one that's newer than the server's — goes into
+   the outbox rather than being thrown away. */
+function mergeRemote(remote){
+  let pulled = 0;
+  Object.keys(remote).forEach(rk => {
+    const r = remote[rk];
+    if (!r || typeof r !== "object") return;
+    const k = localKey(rk);
+    const rAt = Number(r.at) || 0;
+    const l = sizes[k];
+    const lAt = l ? (Number(l.at) || 0) : -1;
+    if (rAt > lAt){
+      sizes[k] = { size: r.size || "", note: r.note || "", at: rAt };
+      pulled++;
+    } else if (lAt > rAt && !pending[k]){
+      queue(k);                       // ours is newer but never made it up
+    }
+  });
+  Object.keys(sizes).forEach(k => {   // entries the server has never seen
+    if (!(remoteKey(k) in remote) && !pending[k]) queue(k);
+  });
+  if (pulled) saveSizes();
+  return pulled;
+}
+
+/* ====================================================================
+   4b. Outbox — writes are batched so a bulk assign is one request.
+   ==================================================================== */
+function queue(key){
+  const e = sizes[key];
+  pending[key] = (e && e.at) || Date.now();
+  savePending();
+}
+
+let flushTimer = null;
+function scheduleFlush(delay){
+  clearTimeout(flushTimer);
+  flushTimer = setTimeout(flush, delay === undefined ? 800 : delay);
+  renderSync();
+}
+
+async function flush(){
+  if (pushing) return;
+  const keys = Object.keys(pending);
+  if (!keys.length){ renderSync(); return; }
+
+  pushing = true; renderSync();
+  const sentAt = {}, updates = {};
+  keys.forEach(k => {
+    const e = sizes[k] || { size:"", note:"", at: Date.now() };
+    sentAt[k] = pending[k];
+    updates[SYNC_NODE + "/" + remoteKey(k)] = { size: e.size || "", note: e.note || "", at: e.at || Date.now() };
+  });
+
+  try {
+    const res = await fetch(API_BASE_URL, {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ password: API_PASSWORD, updates })
+    });
+    if (!res.ok) throw new Error("HTTP " + res.status);
+    const j = await res.json().catch(() => ({ success:true }));
+    if (j && j.success === false) throw new Error(j.error || "Write rejected");
+
+    // Only clear what we actually sent — a row edited mid-flight stays queued.
+    keys.forEach(k => { if (pending[k] === sentAt[k]) delete pending[k]; });
+    savePending();
+    pushError = null; apiOk = true;
+  } catch (err) {
+    console.error(err);
+    pushError = err.message; apiOk = false;
+  } finally {
+    pushing = false;
+    renderSync();
+    if (pendingCount() && !pushError) scheduleFlush(200);
+  }
+}
+
+/* One badge for both halves of the story: can we read, and is everything saved. */
+function renderSync(override){
+  const box = document.getElementById("conn");
+  const txt = document.getElementById("connText");
+  const n = pendingCount();
+  let cls, msg;
+  if (override)          { cls = "";    msg = override; }
+  else if (pushing)      { cls = "";    msg = "Saving…"; }
+  else if (n && !apiOk)  { cls = "err"; msg = `Offline — ${n} unsaved`; }
+  else if (n)            { cls = "";    msg = `${n} to save`; }
+  else if (apiOk)        { cls = "ok";  msg = "Saved to FindMi"; }
+  else if (apiOk === false){ cls = "err"; msg = "Offline"; }
+  else                   { cls = "";    msg = "Connecting…"; }
+  box.className = "conn " + cls;
+  box.title = pushError ? msg + " — " + pushError : msg;
+  txt.textContent = msg;
+  txt.className = cls === "err" ? "" : "wide";   // never hide a problem on mobile
+}
+
+function buildPeople(){
+  people = [];
+  const d = raw || {};
+
+  // Four straightforward people nodes.
+  [["staff","vps"],["do","directors"],["tech","repairTechnicians"],["dm","areaCoaches"]]
+    .forEach(([gid, node]) => {
+      const bag = d[node] || {};
+      Object.keys(bag).forEach(id => {
+        const p = bag[id] || {};
+        const name = (p.name || "").trim();
+        if (!name) return;
+        people.push({
+          key: gid + ":" + id,
+          group: gid,
+          name,
+          sub: subtitleFor(gid, p),
+          badge: gid === "staff" && p.deptHead ? "Dept head" : ""
+        });
+      });
+    });
+
+  // Store managers live on the restaurant record, not in a people node.
+  const rests = d.restaurants || {};
+  Object.keys(rests).forEach(id => {
+    const r = rests[id] || {};
+    const name = (r.storeManager || "").trim();
+    if (!name) return;
+    const num = (r.storeNumber && r.storeNumber !== "#") ? r.storeNumber : "";
+    const store = [num, (r.storeName || "").trim()].filter(Boolean).join(" · ");
+    people.push({
+      key: "sm:" + id,
+      group: "sm",
+      name,
+      sub: store || "Store manager",
+      badge: ""
+    });
+  });
+
+  people.sort((a,b) => a.name.localeCompare(b.name));
+}
+
+function subtitleFor(gid, p){
+  if (gid === "staff") return [p.jobTitle, p.department].filter(Boolean).join(" · ") || "Support staff";
+  if (gid === "do")    return "Director of Operations";
+  if (gid === "tech")  return "Repair technician";
+  if (gid === "dm")    return "District manager";
+  return "";
+}
+
+/* ====================================================================
+   5. Selectors
+   ==================================================================== */
+function groupLabel(gid){ const g = GROUPS.find(x => x.id === gid); return g ? g.label : gid; }
+function inGroup(gid){ return people.filter(p => p.group === gid); }
+function sizeOf(key){ const e = sizes[key]; return e && e.size ? e.size : ""; }
+function noteOf(key){ const e = sizes[key]; return e && e.note ? e.note : ""; }
+
+function visiblePeople(){
+  const q = search.trim().toLowerCase();
+  return inGroup(activeGroup).filter(p => {
+    if (q && p.name.toLowerCase().indexOf(q) === -1 && (p.sub||"").toLowerCase().indexOf(q) === -1) return false;
+    const s = sizeOf(p.key);
+    if (sizeFilter === "__none" && s) return false;
+    if (sizeFilter === "__set"  && !s) return false;
+    if (sizeFilter && sizeFilter.indexOf("__") !== 0 && s !== sizeFilter) return false;
+    return true;
+  });
+}
+
+/* ====================================================================
+   6. Render
+   ==================================================================== */
+function renderAll(){ renderRail(); renderSummary(); renderRows(); renderTally(); renderSizeFilter(); renderSync(); }
+
+function renderRail(){
+  const rail = document.getElementById("rail");
+  rail.innerHTML = GROUPS.map(g => {
+    const list  = inGroup(g.id);
+    const total = list.length;
+    const done  = list.filter(p => sizeOf(p.key)).length;
+    const left  = total - done;
+    const pct   = total ? Math.round(done / total * 100) : 0;
+    // An empty group isn't finished, it's just empty — don't award it a tick.
+    const badge = !total ? `<span class="left none">—</span>`
+                : left  ? `<span class="left">${left}</span>`
+                        : `<span class="left zero">✓</span>`;
+    return `<button class="gchip ${g.id === activeGroup ? "sel" : ""}" onclick="setGroup('${g.id}')" aria-pressed="${g.id === activeGroup}">
+      <b>${esc(g.label)}</b>
+      <div class="nums">${total ? `${done} of ${total} sized` : "nobody yet"}</div>
+      ${badge}
+      <span class="fill"><i style="width:${pct}%"></i></span>
+    </button>`;
+  }).join("");
+}
+
+function renderSummary(){
+  const list  = inGroup(activeGroup);
+  const total = list.length;
+  const done  = list.filter(p => sizeOf(p.key)).length;
+  const pct   = total ? Math.round(done / total * 100) : 0;
+  document.getElementById("summary").innerHTML = `
+    <div><div class="lbl">${esc(groupLabel(activeGroup))}</div><b>${total}</b></div>
+    <div class="ok"><div class="lbl">Sized</div><b>${done}</b></div>
+    <div class="left ${total - done ? "" : "done"}"><div class="lbl">Still to go</div><b>${total - done}</b></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div><div class="lbl">Complete</div><b>${pct}%</b></div>`;
+}
+
+function renderRows(){
+  const list = visiblePeople();
+  const body = document.getElementById("rows");
+  if (!list.length){
+    body.innerHTML = "";
+    if (!people.length) showEmpty("No names loaded yet", "Press Refresh names to pull the roster from FindMi.");
+    else if (search || sizeFilter) showEmpty("Nothing matches that", "Clear the search box or switch the filter back to Everyone.");
+    else showEmpty("No one in this group", "Add them in FindMi and they'll show up here.");
+    return;
+  }
+  hideEmpty();
+  body.innerHTML = list.map(p => {
+    const cur = sizeOf(p.key);
+    const btns = SIZES.map(s =>
+      `<button class="${cur === s ? "on" : ""}" onclick="setSize('${p.key}','${s}')" title="${esc(p.name)} — ${s}">${s}</button>`
+    ).join("");
+    const clr = cur ? `<button class="clr" onclick="setSize('${p.key}','')" title="Clear size">✕</button>` : "";
+    return `<tr>
+      <td>
+        <div class="who">${esc(p.name)}${p.badge ? `<span class="pill">${esc(p.badge)}</span>` : ""}</div>
+        ${p.sub ? `<div class="sub">${esc(p.sub)}</div>` : ""}
+      </td>
+      <td class="col-size"><div class="sizes">${btns}${clr}</div></td>
+      <td class="col-note">
+        <input class="note-in" placeholder="Add a note" value="${esc(noteOf(p.key))}"
+               onchange="setNote('${p.key}', this.value)" aria-label="Note for ${esc(p.name)}">
+      </td>
+    </tr>`;
+  }).join("");
+}
+
+function renderTally(){
+  const list  = inGroup(activeGroup);
+  const counts = {}; SIZES.forEach(s => counts[s] = 0);
+  let sized = 0;
+  list.forEach(p => { const s = sizeOf(p.key); if (s && counts[s] !== undefined){ counts[s]++; sized++; } });
+  const max = Math.max(1, ...SIZES.map(s => counts[s]));
+
+  document.getElementById("tallyScope").textContent = groupLabel(activeGroup) + " — everyone in the group, not just the rows shown.";
+  document.getElementById("tally").innerHTML = SIZES.map(s => {
+    const n = counts[s];
+    return `<tr class="${n ? "" : "none"}">
+      <td>${s}</td>
+      <td class="barcell"><span class="minibar"><i style="width:${Math.round(n / max * 100)}%"></i></span></td>
+      <td class="n">${n}</td>
+    </tr>`;
+  }).join("") + `<tr class="none"><td>No size yet</td><td class="barcell"></td><td class="n">${list.length - sized}</td></tr>`;
+  document.getElementById("tallyTotal").textContent = sized;
+}
+
+function renderSizeFilter(){
+  const sel = document.getElementById("filterSize");
+  const cur = sel.value;
+  sel.innerHTML =
+    `<option value="">Everyone</option><option value="__none">No size yet</option><option value="__set">Has a size</option>` +
+    SIZES.map(s => `<option value="${s}">Size ${s}</option>`).join("");
+  sel.value = cur;
+}
+
+function showEmpty(title, body){
+  const el = document.getElementById("empty");
+  el.innerHTML = `<b>${esc(title)}</b>${esc(body)}`;
+  el.style.display = "block";
+}
+function hideEmpty(){ document.getElementById("empty").style.display = "none"; }
+
+/* ====================================================================
+   7. Actions
+   ==================================================================== */
+function setGroup(gid){ activeGroup = gid; renderAll(); }
+function setSearch(v){ search = v; renderRows(); }
+function setSizeFilter(v){ sizeFilter = v; renderRows(); }
+
+/* Every edit stamps a fresh `at` and joins the outbox. Clearing writes an
+   empty record rather than deleting, so the clear can win the merge. */
+function touch(key, patch){
+  const e = Object.assign({ size:"", note:"" }, sizes[key] || {}, patch);
+  e.at = Date.now();
+  sizes[key] = e;
+  saveSizes();
+  queue(key);
+}
+
+function setSize(key, size){
+  touch(key, { size: size || "" });
+  scheduleFlush();
+  renderAll();
+}
+
+function setNote(key, note){
+  touch(key, { note: (note || "").trim() });
+  scheduleFlush();
+  renderTally();
+}
+
+function clearAll(){
+  const n = filledCount();
+  if (!n){ toast("There's nothing to clear."); return; }
+  if (!confirm(`Clear all ${n} saved size${n === 1 ? "" : "s"}? This clears them for everyone, on every device.`)) return;
+  Object.keys(sizes).forEach(k => {
+    if (sizes[k] && (sizes[k].size || sizes[k].note)) touch(k, { size:"", note:"" });
+  });
+  scheduleFlush(0);
+  renderAll();
+  toast("All sizes cleared.");
+}
+
+/* ---- Bulk ---- */
+function openBulk(){
+  const list = visiblePeople();
+  if (!list.length){ toast("No rows to set."); return; }
+  document.getElementById("bulkScope").textContent =
+    `${list.length} ${list.length === 1 ? "person" : "people"} currently shown in ${groupLabel(activeGroup)}.`;
+  document.getElementById("bulkSize").innerHTML = SIZES.map(s => `<option value="${s}">${s}</option>`).join("");
+  document.getElementById("bulkSize").value = "L";
+  openModal("bulkOverlay");
+}
+function runBulk(){
+  const size = document.getElementById("bulkSize").value;
+  const who  = document.getElementById("bulkWho").value;
+  const list = visiblePeople().filter(p => who === "all" || !sizeOf(p.key));
+  list.forEach(p => touch(p.key, { size }));
+  savePending(); closeModal("bulkOverlay");
+  scheduleFlush(0); renderAll();
+  toast(list.length ? `Set ${list.length} to ${size}.` : "Everyone shown already had a size.");
+}
+
+/* ====================================================================
+   8. Excel out
+   ==================================================================== */
+function openExport(){
+  document.getElementById("exportGroups").innerHTML = GROUPS.map(g => {
+    const n = inGroup(g.id).length;
+    return `<label><input type="checkbox" value="${g.id}" checked> ${esc(g.label)} <span style="color:var(--muted)">(${n})</span></label>`;
+  }).join("");
+  openModal("exportOverlay");
+}
+
+function runExport(){
+  const picked = Array.from(document.querySelectorAll("#exportGroups input:checked")).map(i => i.value);
+  if (!picked.length){ toast("Pick at least one group."); return; }
+  const scope = document.getElementById("exportScope").value;
+  const btn = document.getElementById("exportGo");
+  btn.disabled = true; btn.textContent = "Building…";
+
+  ensureSheetJS(() => {
+    try {
+      const wb = XLSX.utils.book_new();
+      const header = ["Key","Group","Name","Detail","Size","Note"];
+      const grand = {}; SIZES.forEach(s => grand[s] = 0);
+      let any = 0;
+
+      picked.forEach(gid => {
+        const rows = inGroup(gid).filter(p => {
+          const s = sizeOf(p.key);
+          if (scope === "set")  return !!s;
+          if (scope === "none") return !s;
+          return true;
+        }).map(p => {
+          const s = sizeOf(p.key);
+          if (s) grand[s]++;
+          return [p.key, groupLabel(gid), p.name, p.sub || "", s, noteOf(p.key)];
+        });
+        if (!rows.length) return;
+        any += rows.length;
+        const ws = XLSX.utils.aoa_to_sheet([header].concat(rows));
+        ws["!cols"] = [{wch:26},{wch:20},{wch:26},{wch:32},{wch:8},{wch:28}];
+        XLSX.utils.book_append_sheet(wb, ws, sheetName(groupLabel(gid)));
+      });
+
+      if (!any){ toast("Nothing matched — try a different Rows option."); return; }
+
+      const tot = [["Size","Shirts"]].concat(
+        SIZES.map(s => [s, grand[s]]),
+        [["Total", SIZES.reduce((a,s) => a + grand[s], 0)]]
+      );
+      const tws = XLSX.utils.aoa_to_sheet(tot);
+      tws["!cols"] = [{wch:10},{wch:10}];
+      XLSX.utils.book_append_sheet(wb, tws, "Order Totals");
+
+      XLSX.writeFile(wb, `ClotheMi_Shirt_Sizes_${stamp()}.xlsx`);
+      closeModal("exportOverlay");
+      toast("Workbook downloaded.");
+    } catch (err) {
+      console.error(err);
+      toast("Export failed. Try again.");
+    } finally {
+      btn.disabled = false; btn.textContent = "Download .xlsx";
+    }
+  }, () => {
+    btn.disabled = false; btn.textContent = "Download .xlsx";
+    toast("Couldn't load the Excel library. Check your connection.");
+  });
+}
+
+function sheetName(s){ return String(s).replace(/[\\\/\?\*\[\]:]/g, "").slice(0, 31) || "Sheet"; }
+function stamp(){
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}`;
+}
+
+/* ====================================================================
+   9. Excel in
+   ==================================================================== */
+let pendingImport = null;
+
+function openImport(){
+  pendingImport = null;
+  document.getElementById("importFile").value = "";
+  document.getElementById("importReport").style.display = "none";
+  document.getElementById("importGo").disabled = true;
+  openModal("importOverlay");
+}
+
+function previewImport(){
+  const f = document.getElementById("importFile").files[0];
+  if (!f) return;
+  ensureSheetJS(() => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const wb = XLSX.read(new Uint8Array(e.target.result), { type:"array" });
+        const byKey = {}; people.forEach(p => byKey[p.key] = p);
+        const byName = {};
+        people.forEach(p => {
+          const k = norm(p.name);
+          (byName[k] = byName[k] || []).push(p);
+        });
+
+        const updates = []; let unmatched = 0, badSize = 0, ambiguous = 0;
+
+        wb.SheetNames.forEach(sn => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { defval:"" });
+          rows.forEach(r => {
+            const col = {}; Object.keys(r).forEach(k => col[norm(k)] = r[k]);
+            const keyVal  = String(col["key"] || "").trim();
+            const nameVal = String(col["name"] || "").trim();
+            if (!keyVal && !nameVal) return;
+            if (!("size" in col) && !("shirtsize" in col)) return;
+
+            let person = keyVal ? byKey[keyVal] : null;
+            if (!person && nameVal){
+              const hits = byName[norm(nameVal)] || [];
+              if (hits.length === 1) person = hits[0];
+              else if (hits.length > 1){ ambiguous++; return; }
+            }
+            if (!person){ unmatched++; return; }
+
+            const rawSize = String(col["size"] !== undefined ? col["size"] : col["shirtsize"]).trim();
+            const size = rawSize ? canonSize(rawSize) : "";
+            if (rawSize && !size){ badSize++; return; }
+
+            updates.push({ key:person.key, size, note:String(col["note"] || "").trim() });
+          });
+        });
+
+        pendingImport = updates;
+        const bits = [`<b>${updates.length}</b> row${updates.length === 1 ? "" : "s"} ready to apply.`];
+        if (unmatched) bits.push(`${unmatched} name${unmatched === 1 ? "" : "s"} not in the FindMi roster — skipped.`);
+        if (ambiguous) bits.push(`${ambiguous} name${ambiguous === 1 ? "" : "s"} appear more than once — add the Key column to tell them apart.`);
+        if (badSize)   bits.push(`${badSize} size${badSize === 1 ? "" : "s"} weren't recognised — skipped.`);
+
+        const rep = document.getElementById("importReport");
+        rep.className = updates.length ? "note" : "warn";
+        rep.innerHTML = bits.join("<br>");
+        rep.style.display = "block";
+        document.getElementById("importGo").disabled = !updates.length;
+      } catch (err) {
+        console.error(err);
+        const rep = document.getElementById("importReport");
+        rep.className = "warn";
+        rep.textContent = "That file couldn't be read. Save it as .xlsx and try again.";
+        rep.style.display = "block";
+        document.getElementById("importGo").disabled = true;
+      }
+    };
+    reader.readAsArrayBuffer(f);
+  }, () => toast("Couldn't load the Excel library. Check your connection."));
+}
+
+function runImport(){
+  if (!pendingImport || !pendingImport.length) return;
+  let changed = 0;
+  pendingImport.forEach(u => {
+    const e = sizes[u.key] || {};
+    const before = (e.size || "") + "|" + (e.note || "");
+    const after  = (u.size || "") + "|" + (u.note || e.note || "");
+    if (before === after) return;
+    touch(u.key, { size: u.size || "", note: u.note || e.note || "" });
+    changed++;
+  });
+  closeModal("importOverlay");
+  scheduleFlush(0); renderAll();
+  toast(changed ? `Updated ${changed} ${changed === 1 ? "person" : "people"}.` : "Nothing changed — sizes already matched.");
+}
+
+/* XXL / xx-large / 2xl all land on 2XL. */
+function canonSize(v){
+  let s = String(v).toUpperCase().replace(/[\s\-_.]/g, "");
+  s = s.replace(/EXTRALARGE/g, "XL").replace(/LARGE/g, "L")
+       .replace(/EXTRASMALL/g, "XS").replace(/SMALL/g, "S").replace(/MEDIUM/g, "M");
+  const xs = s.match(/^X{2,5}L$/);
+  if (xs) return (s.length - 1) + "XL";
+  const nx = s.match(/^([2-5])XL?$/);
+  if (nx) return nx[1] + "XL";
+  if (SIZES.indexOf(s) !== -1) return s;
+  return "";
+}
+
+/* ====================================================================
+   10. Bits and pieces
+   ==================================================================== */
+let __sheetJSLoading = false;
+function ensureSheetJS(onReady, onError){
+  if (typeof XLSX !== "undefined"){ onReady(); return; }
+  if (__sheetJSLoading){ setTimeout(() => ensureSheetJS(onReady, onError), 260); return; }
+  __sheetJSLoading = true;
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  s.onload  = () => { __sheetJSLoading = false; onReady(); };
+  s.onerror = () => { __sheetJSLoading = false; onError && onError(); };
+  document.head.appendChild(s);
+}
+
+function openModal(id){ document.getElementById(id).classList.add("open"); }
+function closeModal(id){ document.getElementById(id).classList.remove("open"); }
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") document.querySelectorAll(".overlay.open").forEach(o => o.classList.remove("open"));
+});
+
+let toastTimer = null;
+function toast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
+}
+
+function esc(str){
+  if (str === null || str === undefined) return "";
+  return String(str).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+                    .replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+}
+function norm(s){ return String(s).toLowerCase().replace(/[^a-z0-9]/g, ""); }
+
+/* ====================================================================
+   11. Go
+   ==================================================================== */
+if (!store.persistent){
+  document.getElementById("storageNote").textContent =
+    "This browser blocks local caching, so anything entered while offline is lost on reload.";
+}
+
+/* Converge with other devices: poll quietly, and catch up the moment the
+   tab is looked at again or the network comes back. */
+setInterval(() => { if (!document.hidden) loadRoster({ silent:true }); }, POLL_MS);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden){ loadRoster({ silent:true }); if (pendingCount()) scheduleFlush(0); }
+});
+window.addEventListener("online", () => { loadRoster({ silent:true }); scheduleFlush(0); });
+
+window.addEventListener("beforeunload", e => {
+  if (!pendingCount()) return;
+  e.preventDefault(); e.returnValue = "";   // some sizes haven't uploaded yet
+});
+
+renderSync();
+renderAll();
+loadRoster();
+</script>
+</body>
+</html>
