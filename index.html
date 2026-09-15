@@ -152,6 +152,9 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
 .note-in:hover{border-color:var(--line)}
 .note-in:focus{border-color:var(--navy); background:#fff; color:var(--ink)}
 .col-size{width:1%; white-space:nowrap}
+.col-cut{width:1%; white-space:nowrap}
+.sizes.cuts button{min-width:32px; border-color:var(--line)}
+.sizes.cuts button.on{background:var(--flag); border-color:var(--flag)}
 .col-note{width:34%}
 
 /* Size chooser */
@@ -166,17 +169,19 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
 .sizes .clr:hover{border-color:var(--red); color:var(--red)}
 
 /* Tally panel — the thing you actually take to the printer */
-.side{width:236px; flex:none; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:12px}
+.side{width:248px; flex:none; background:var(--card); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:12px}
 .side h3{margin:0 0 2px; font-size:.72rem; text-transform:uppercase; letter-spacing:.07em; color:var(--muted)}
 .side .hint{font-size:.68rem; color:var(--muted); margin-bottom:9px}
 .side table{width:100%; border-collapse:collapse; font-size:.82rem}
 .side td{padding:5px 2px; border-bottom:1px dashed var(--line); font-variant-numeric:tabular-nums}
 .side td.n{text-align:right; font-weight:800}
-.side .barcell{width:52%; padding-left:8px}
-.side .minibar{display:block; height:6px; border-radius:99px; background:var(--navy-soft); overflow:hidden}
-.side .minibar i{display:block; height:100%; background:var(--navy)}
-.side tr.none td{color:var(--muted)}
-.side tr.none td.n{color:var(--red)}
+.side td.n{width:30px}
+.side tr.thead td{border-bottom:1px solid var(--line); font-size:.62rem; text-transform:uppercase;
+  letter-spacing:.06em; color:var(--muted); font-weight:800; padding-bottom:3px}
+.side td.n.unset{color:var(--flag)}
+.side tr.none td, .side tr.none td.n{color:var(--line)}
+.side tr.todo td{color:var(--muted)}
+.side tr.todo td.n{color:var(--red)}
 .side .foot{margin-top:10px; padding-top:9px; border-top:1px solid var(--line); font-size:.75rem; color:var(--muted); display:flex; justify-content:space-between}
 .side .foot b{color:var(--ink); font-variant-numeric:tabular-nums}
 @media (max-width:1040px){ .side{display:none} }
@@ -197,7 +202,9 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
   .grid tr:last-child{border-bottom:0}
   .grid tr:hover td{background:transparent}
   .grid td{padding:0; border-bottom:0}
-  .grid td.col-size{margin-top:9px; width:auto}
+  .grid td.col-cut{margin-top:9px; width:auto}
+  .grid td.col-size{margin-top:7px; width:auto}
+  .sizes.cuts button{flex:0 0 52px}
   .grid td.col-note{margin-top:8px; width:auto}
   .sizes{flex-wrap:wrap; gap:6px}
   .sizes button{flex:1 1 44px; min-width:44px; padding:8px 4px}
@@ -257,9 +264,21 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
 <div class="toolbar">
   <input type="search" id="search" placeholder="Search a name…" oninput="setSearch(this.value)" aria-label="Search names">
   <select id="filterSize" onchange="setSizeFilter(this.value)" aria-label="Filter by size">
-    <option value="">Everyone</option>
+    <option value="">Any size</option>
     <option value="__none">No size yet</option>
     <option value="__set">Has a size</option>
+  </select>
+  <select id="filterCut" onchange="setCutFilter(this.value)" aria-label="Filter by cut">
+    <option value="">Any cut</option>
+    <option value="M">Men's only</option>
+    <option value="W">Women's only</option>
+    <option value="__none">Cut not set</option>
+  </select>
+  <select id="sortMode" onchange="setSortMode(this.value)" aria-label="Sort by">
+    <option value="name">Sort: name</option>
+    <option value="cut">Sort: cut</option>
+    <option value="size">Sort: size</option>
+    <option value="todo">Sort: unsized first</option>
   </select>
   <button class="btn" onclick="openBulk()">Set several at once</button>
 </div>
@@ -274,6 +293,7 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
         <thead>
           <tr>
             <th>Name</th>
+            <th class="col-cut">Cut</th>
             <th class="col-size">Shirt size</th>
             <th class="col-note">Note</th>
           </tr>
@@ -326,6 +346,7 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
       <b>What the file needs</b>
       <ul>
         <li>A <b>Size</b> column, and either a <b>Key</b> column or a <b>Name</b> column.</li>
+        <li>A <b>Cut</b> column is optional — M/men's, W/women's. Leave the column out entirely to keep the cuts you already have.</li>
         <li>Sizes accepted: XS, S, M, L, XL, 2XL–5XL (XXL and XXXL work too).</li>
         <li>A blank size clears that person. A <b>Note</b> column is picked up if present.</li>
       </ul>
@@ -343,8 +364,15 @@ table.grid{width:100%; border-collapse:collapse; min-width:660px}
   <div class="modal" style="max-width:480px">
     <h2>Set several at once</h2>
     <div class="sub-t" id="bulkScope"></div>
-    <label>Give everyone shown this size</label>
+    <label>Shirt size</label>
     <select id="bulkSize"></select>
+    <label>Cut</label>
+    <select id="bulkCut">
+      <option value="">Leave cut alone</option>
+      <option value="M">Men's</option>
+      <option value="W">Women's</option>
+      <option value="__clear">Clear the cut</option>
+    </select>
     <label style="margin-top:14px">Who it applies to</label>
     <select id="bulkWho">
       <option value="none">Only people without a size yet</option>
@@ -376,12 +404,60 @@ const STORE_KEY    = "clothemi.sizes.v1";
 const PENDING_KEY  = "clothemi.pending.v1";
 const POLL_MS      = 60000;
 
+/* Stale-client protection, mirroring FindMi v7.2. Browsers cache the HTML, so
+   two devices can run different builds against the same data. The newest client
+   publishes its version; older ones reload themselves. Deliberately its OWN
+   node — writing admins/appMeta would fight FindMi's version number. */
+const APP_VERSION = "1.0";
+const VERSION_NODE = "admins/clotheMiMeta";
+let _versionPublished = false;
+
+function cmpVer(a, b){
+  const pa = String(a || "0").split(".").map(Number);
+  const pb = String(b || "0").split(".").map(Number);
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++){
+    const x = pa[i] || 0, y = pb[i] || 0;
+    if (x !== y) return x > y ? 1 : -1;
+  }
+  return 0;
+}
+
+function checkAppVersion(admins){
+  const server = ((admins || {}).clotheMiMeta || {}).version;
+  if (!server || cmpVer(APP_VERSION, server) > 0){
+    if (_versionPublished) return;
+    _versionPublished = true;
+    fetch(API_BASE_URL, {
+      method:"POST", headers:{ "Content-Type":"application/json" },
+      body: JSON.stringify({ password: API_PASSWORD,
+        updates: { [VERSION_NODE]: { version: APP_VERSION, updatedAt: Date.now() } } })
+    }).catch(() => { _versionPublished = false; });
+  } else if (cmpVer(server, APP_VERSION) > 0){
+    // Never reload on top of unsaved work — push it first, then refresh.
+    if (pendingCount()){ scheduleFlush(0); return; }
+    let done = null;
+    try { done = sessionStorage.getItem("clothemi_reloadedFor"); } catch(e){}
+    if (done === server) return;
+    try { sessionStorage.setItem("clothemi_reloadedFor", server); } catch(e){}
+    renderSync("Updating to v" + server + "…");
+    setTimeout(() => location.replace(location.pathname + "?v=" + encodeURIComponent(server)), 800);
+  }
+}
+
 /* Keys are "staff:v1" locally. Colons are legal in a JSON key but not worth
    betting the sync on, so they travel as "~" inside the API path. */
 function remoteKey(k){ return String(k).replace(/:/g, "~"); }
 function localKey(rk){ return String(rk).replace(/~/g, ":"); }
 
 const SIZES = ["XS","S","M","L","XL","2XL","3XL","4XL","5XL"];
+
+/* Shirt cut. Tracked because men's and women's shirts are ordered as separate
+   line items — a women's L is not a men's L. Two buttons, click again to clear. */
+const CUTS = [
+  { id:"M", label:"M", full:"Men's cut" },
+  { id:"W", label:"W", full:"Women's cut" }
+];
+function cutLabel(c){ const x = CUTS.find(k => k.id === c); return x ? x.full : "Not set"; }
 
 /* Order here is the order of the five menus across the rail. */
 const GROUPS = [
@@ -427,7 +503,7 @@ let pending = store.read(PENDING_KEY);   // { key: at-value queued for push }
 function saveSizes(){ store.write(STORE_KEY, sizes); }
 function savePending(){ store.write(PENDING_KEY, pending); }
 function pendingCount(){ return Object.keys(pending).length; }
-function filledCount(){ return Object.keys(sizes).filter(k => sizes[k] && (sizes[k].size || sizes[k].note)).length; }
+function filledCount(){ return Object.keys(sizes).filter(k => sizes[k] && (sizes[k].size || sizes[k].note || sizes[k].cut)).length; }
 
 /* ====================================================================
    3. State
@@ -437,6 +513,8 @@ let people = [];                   // flattened roster
 let activeGroup = "staff";
 let search = "";
 let sizeFilter = "";
+let cutFilter = "";
+let sortMode = "name";
 let apiOk = null;                  // null = not tried yet
 let pushing = false;
 let pushError = null;
@@ -467,6 +545,7 @@ async function loadRoster(opts){
   raw = data;
   buildPeople();
 
+  checkAppVersion(data.admins);
   const pulled = mergeRemote((data.admins && data.admins.shirtSizes) || {});
   renderAll();
   if (pendingCount()) scheduleFlush(0);
@@ -486,7 +565,7 @@ function mergeRemote(remote){
     const l = sizes[k];
     const lAt = l ? (Number(l.at) || 0) : -1;
     if (rAt > lAt){
-      sizes[k] = { size: r.size || "", note: r.note || "", at: rAt };
+      sizes[k] = { size: r.size || "", note: r.note || "", cut: r.cut || "", at: rAt };
       pulled++;
     } else if (lAt > rAt && !pending[k]){
       queue(k);                       // ours is newer but never made it up
@@ -525,7 +604,7 @@ async function flush(){
   keys.forEach(k => {
     const e = sizes[k] || { size:"", note:"", at: Date.now() };
     sentAt[k] = pending[k];
-    updates[SYNC_NODE + "/" + remoteKey(k)] = { size: e.size || "", note: e.note || "", at: e.at || Date.now() };
+    updates[SYNC_NODE + "/" + remoteKey(k)] = { size: e.size || "", note: e.note || "", cut: e.cut || "", at: e.at || Date.now() };
   });
 
   try {
@@ -628,17 +707,38 @@ function groupLabel(gid){ const g = GROUPS.find(x => x.id === gid); return g ? g
 function inGroup(gid){ return people.filter(p => p.group === gid); }
 function sizeOf(key){ const e = sizes[key]; return e && e.size ? e.size : ""; }
 function noteOf(key){ const e = sizes[key]; return e && e.note ? e.note : ""; }
+function cutOf(key){ const e = sizes[key]; return e && e.cut ? e.cut : ""; }
+
+const SIZE_RANK = {}; SIZES.forEach((s, i) => SIZE_RANK[s] = i);
 
 function visiblePeople(){
   const q = search.trim().toLowerCase();
-  return inGroup(activeGroup).filter(p => {
+  const list = inGroup(activeGroup).filter(p => {
     if (q && p.name.toLowerCase().indexOf(q) === -1 && (p.sub||"").toLowerCase().indexOf(q) === -1) return false;
-    const s = sizeOf(p.key);
+    const s = sizeOf(p.key), c = cutOf(p.key);
     if (sizeFilter === "__none" && s) return false;
     if (sizeFilter === "__set"  && !s) return false;
     if (sizeFilter && sizeFilter.indexOf("__") !== 0 && s !== sizeFilter) return false;
+    if (cutFilter === "__none" && c) return false;
+    if (cutFilter && cutFilter !== "__none" && c !== cutFilter) return false;
     return true;
   });
+
+  const byName = (a,b) => a.name.localeCompare(b.name);
+  if (sortMode === "cut"){
+    // Unset sorts last, not first — it reads as an unanswered question.
+    const rank = k => { const c = cutOf(k); return c === "M" ? 0 : c === "W" ? 1 : 2; };
+    list.sort((a,b) => rank(a.key) - rank(b.key) || byName(a,b));
+  } else if (sortMode === "size"){
+    const rank = k => { const s = sizeOf(k); return s ? SIZE_RANK[s] : 99; };
+    list.sort((a,b) => rank(a.key) - rank(b.key) || byName(a,b));
+  } else if (sortMode === "todo"){
+    const rank = k => (sizeOf(k) ? 1 : 0);
+    list.sort((a,b) => rank(a.key) - rank(b.key) || byName(a,b));
+  } else {
+    list.sort(byName);
+  }
+  return list;
 }
 
 /* ====================================================================
@@ -686,22 +786,29 @@ function renderRows(){
   if (!list.length){
     body.innerHTML = "";
     if (!people.length) showEmpty("No names loaded yet", "Press Refresh names to pull the roster from FindMi.");
-    else if (search || sizeFilter) showEmpty("Nothing matches that", "Clear the search box or switch the filter back to Everyone.");
+    else if (search || sizeFilter || cutFilter) showEmpty("Nothing matches that", "Clear the search box or set the filters back to Everyone.");
     else showEmpty("No one in this group", "Add them in FindMi and they'll show up here.");
     return;
   }
   hideEmpty();
   body.innerHTML = list.map(p => {
     const cur = sizeOf(p.key);
+    const cut = cutOf(p.key);
     const btns = SIZES.map(s =>
       `<button class="${cur === s ? "on" : ""}" onclick="setSize('${p.key}','${s}')" title="${esc(p.name)} — ${s}">${s}</button>`
     ).join("");
     const clr = cur ? `<button class="clr" onclick="setSize('${p.key}','')" title="Clear size">✕</button>` : "";
+    // Clicking the active cut again clears it, so no third button is needed.
+    const cuts = CUTS.map(c =>
+      `<button class="${cut === c.id ? "on" : ""}" onclick="setCut('${p.key}','${c.id}')"
+               title="${esc(p.name)} — ${c.full}${cut === c.id ? " (click to clear)" : ""}">${c.label}</button>`
+    ).join("");
     return `<tr>
       <td>
         <div class="who">${esc(p.name)}${p.badge ? `<span class="pill">${esc(p.badge)}</span>` : ""}</div>
         ${p.sub ? `<div class="sub">${esc(p.sub)}</div>` : ""}
       </td>
+      <td class="col-cut"><div class="sizes cuts">${cuts}</div></td>
       <td class="col-size"><div class="sizes">${btns}${clr}</div></td>
       <td class="col-note">
         <input class="note-in" placeholder="Add a note" value="${esc(noteOf(p.key))}"
@@ -712,21 +819,31 @@ function renderRows(){
 }
 
 function renderTally(){
-  const list  = inGroup(activeGroup);
-  const counts = {}; SIZES.forEach(s => counts[s] = 0);
+  const list = inGroup(activeGroup);
+  // Men's and women's shirts are separate line items on a purchase order,
+  // so the tally splits them rather than summing into one number.
+  const grid = {}; SIZES.forEach(s => grid[s] = { M:0, W:0, "":0, all:0 });
   let sized = 0;
-  list.forEach(p => { const s = sizeOf(p.key); if (s && counts[s] !== undefined){ counts[s]++; sized++; } });
-  const max = Math.max(1, ...SIZES.map(s => counts[s]));
+  list.forEach(p => {
+    const s = sizeOf(p.key);
+    if (!s || !grid[s]) return;
+    grid[s][cutOf(p.key) || ""]++; grid[s].all++; sized++;
+  });
 
-  document.getElementById("tallyScope").textContent = groupLabel(activeGroup) + " — everyone in the group, not just the rows shown.";
-  document.getElementById("tally").innerHTML = SIZES.map(s => {
-    const n = counts[s];
-    return `<tr class="${n ? "" : "none"}">
-      <td>${s}</td>
-      <td class="barcell"><span class="minibar"><i style="width:${Math.round(n / max * 100)}%"></i></span></td>
-      <td class="n">${n}</td>
-    </tr>`;
-  }).join("") + `<tr class="none"><td>No size yet</td><td class="barcell"></td><td class="n">${list.length - sized}</td></tr>`;
+  document.getElementById("tallyScope").textContent =
+    groupLabel(activeGroup) + " — everyone in the group, not just the rows shown.";
+  document.getElementById("tally").innerHTML =
+    `<tr class="thead"><td></td><td class="n">M</td><td class="n">W</td><td class="n">?</td></tr>` +
+    SIZES.map(s => {
+      const g = grid[s];
+      return `<tr class="${g.all ? "" : "none"}">
+        <td>${s}</td>
+        <td class="n">${g.M || "·"}</td>
+        <td class="n">${g.W || "·"}</td>
+        <td class="n ${g[""] ? "unset" : ""}">${g[""] || "·"}</td>
+      </tr>`;
+    }).join("") +
+    `<tr class="todo"><td>No size yet</td><td class="n" colspan="3">${list.length - sized}</td></tr>`;
   document.getElementById("tallyTotal").textContent = sized;
 }
 
@@ -734,7 +851,7 @@ function renderSizeFilter(){
   const sel = document.getElementById("filterSize");
   const cur = sel.value;
   sel.innerHTML =
-    `<option value="">Everyone</option><option value="__none">No size yet</option><option value="__set">Has a size</option>` +
+    `<option value="">Any size</option><option value="__none">No size yet</option><option value="__set">Has a size</option>` +
     SIZES.map(s => `<option value="${s}">Size ${s}</option>`).join("");
   sel.value = cur;
 }
@@ -752,11 +869,13 @@ function hideEmpty(){ document.getElementById("empty").style.display = "none"; }
 function setGroup(gid){ activeGroup = gid; renderAll(); }
 function setSearch(v){ search = v; renderRows(); }
 function setSizeFilter(v){ sizeFilter = v; renderRows(); }
+function setCutFilter(v){ cutFilter = v; renderRows(); }
+function setSortMode(v){ sortMode = v; renderRows(); }
 
 /* Every edit stamps a fresh `at` and joins the outbox. Clearing writes an
    empty record rather than deleting, so the clear can win the merge. */
 function touch(key, patch){
-  const e = Object.assign({ size:"", note:"" }, sizes[key] || {}, patch);
+  const e = Object.assign({ size:"", note:"", cut:"" }, sizes[key] || {}, patch);
   e.at = Date.now();
   sizes[key] = e;
   saveSizes();
@@ -765,6 +884,13 @@ function touch(key, patch){
 
 function setSize(key, size){
   touch(key, { size: size || "" });
+  scheduleFlush();
+  renderAll();
+}
+
+/* Clicking the cut that's already on clears it — one button, two states. */
+function setCut(key, cut){
+  touch(key, { cut: cutOf(key) === cut ? "" : cut });
   scheduleFlush();
   renderAll();
 }
@@ -780,7 +906,7 @@ function clearAll(){
   if (!n){ toast("There's nothing to clear."); return; }
   if (!confirm(`Clear all ${n} saved size${n === 1 ? "" : "s"}? This clears them for everyone, on every device.`)) return;
   Object.keys(sizes).forEach(k => {
-    if (sizes[k] && (sizes[k].size || sizes[k].note)) touch(k, { size:"", note:"" });
+    if (sizes[k] && (sizes[k].size || sizes[k].note || sizes[k].cut)) touch(k, { size:"", note:"", cut:"" });
   });
   scheduleFlush(0);
   renderAll();
@@ -793,18 +919,31 @@ function openBulk(){
   if (!list.length){ toast("No rows to set."); return; }
   document.getElementById("bulkScope").textContent =
     `${list.length} ${list.length === 1 ? "person" : "people"} currently shown in ${groupLabel(activeGroup)}.`;
-  document.getElementById("bulkSize").innerHTML = SIZES.map(s => `<option value="${s}">${s}</option>`).join("");
+  document.getElementById("bulkSize").innerHTML =
+    `<option value="">Leave size alone</option>` + SIZES.map(s => `<option value="${s}">${s}</option>`).join("");
   document.getElementById("bulkSize").value = "L";
+  document.getElementById("bulkCut").value = "";
   openModal("bulkOverlay");
 }
 function runBulk(){
   const size = document.getElementById("bulkSize").value;
+  const cutV = document.getElementById("bulkCut").value;
   const who  = document.getElementById("bulkWho").value;
+  if (!size && !cutV){ toast("Pick a size or a cut to apply."); return; }
+
   const list = visiblePeople().filter(p => who === "all" || !sizeOf(p.key));
-  list.forEach(p => touch(p.key, { size }));
-  savePending(); closeModal("bulkOverlay");
+  list.forEach(p => {
+    const patch = {};
+    if (size) patch.size = size;
+    if (cutV) patch.cut = cutV === "__clear" ? "" : cutV;
+    touch(p.key, patch);
+  });
+  closeModal("bulkOverlay");
   scheduleFlush(0); renderAll();
-  toast(list.length ? `Set ${list.length} to ${size}.` : "Everyone shown already had a size.");
+  if (!list.length){ toast("Everyone shown already had a size."); return; }
+  const what = [size ? size : null, cutV && cutV !== "__clear" ? cutLabel(cutV).toLowerCase() : null]
+    .filter(Boolean).join(", ") || "cleared cut";
+  toast(`Set ${list.length} to ${what}.`);
 }
 
 /* ====================================================================
@@ -828,8 +967,8 @@ function runExport(){
   ensureSheetJS(() => {
     try {
       const wb = XLSX.utils.book_new();
-      const header = ["Key","Group","Name","Detail","Size","Note"];
-      const grand = {}; SIZES.forEach(s => grand[s] = 0);
+      const header = ["Key","Group","Name","Detail","Cut","Size","Note"];
+      const grand = {}; SIZES.forEach(s => grand[s] = { M:0, W:0, "":0 });
       let any = 0;
 
       picked.forEach(gid => {
@@ -839,25 +978,26 @@ function runExport(){
           if (scope === "none") return !s;
           return true;
         }).map(p => {
-          const s = sizeOf(p.key);
-          if (s) grand[s]++;
-          return [p.key, groupLabel(gid), p.name, p.sub || "", s, noteOf(p.key)];
+          const s = sizeOf(p.key), c = cutOf(p.key);
+          if (s) grand[s][c || ""]++;
+          return [p.key, groupLabel(gid), p.name, p.sub || "", c, s, noteOf(p.key)];
         });
         if (!rows.length) return;
         any += rows.length;
         const ws = XLSX.utils.aoa_to_sheet([header].concat(rows));
-        ws["!cols"] = [{wch:26},{wch:20},{wch:26},{wch:32},{wch:8},{wch:28}];
+        ws["!cols"] = [{wch:26},{wch:20},{wch:26},{wch:32},{wch:6},{wch:8},{wch:28}];
         XLSX.utils.book_append_sheet(wb, ws, sheetName(groupLabel(gid)));
       });
 
       if (!any){ toast("Nothing matched — try a different Rows option."); return; }
 
-      const tot = [["Size","Shirts"]].concat(
-        SIZES.map(s => [s, grand[s]]),
-        [["Total", SIZES.reduce((a,s) => a + grand[s], 0)]]
+      const sum = k => SIZES.reduce((a,s) => a + grand[s][k], 0);
+      const tot = [["Size","Men's","Women's","Cut not set","Total"]].concat(
+        SIZES.map(s => [s, grand[s].M, grand[s].W, grand[s][""], grand[s].M + grand[s].W + grand[s][""]]),
+        [["Total", sum("M"), sum("W"), sum(""), sum("M") + sum("W") + sum("")]]
       );
       const tws = XLSX.utils.aoa_to_sheet(tot);
-      tws["!cols"] = [{wch:10},{wch:10}];
+      tws["!cols"] = [{wch:10},{wch:9},{wch:10},{wch:13},{wch:9}];
       XLSX.utils.book_append_sheet(wb, tws, "Order Totals");
 
       XLSX.writeFile(wb, `ClotheMi_Shirt_Sizes_${stamp()}.xlsx`);
@@ -932,7 +1072,13 @@ function previewImport(){
             const size = rawSize ? canonSize(rawSize) : "";
             if (rawSize && !size){ badSize++; return; }
 
-            updates.push({ key:person.key, size, note:String(col["note"] || "").trim() });
+            const rawCut = String(col["cut"] !== undefined ? col["cut"] : (col["gender"] || "")).trim();
+            updates.push({
+              key: person.key, size,
+              cut: canonCut(rawCut),
+              hasCut: !!rawCut || ("cut" in col) || ("gender" in col),
+              note: String(col["note"] || "").trim()
+            });
           });
         });
 
@@ -965,15 +1111,26 @@ function runImport(){
   let changed = 0;
   pendingImport.forEach(u => {
     const e = sizes[u.key] || {};
-    const before = (e.size || "") + "|" + (e.note || "");
-    const after  = (u.size || "") + "|" + (u.note || e.note || "");
+    const cut = u.hasCut ? u.cut : (e.cut || "");
+    const before = (e.size || "") + "|" + (e.note || "") + "|" + (e.cut || "");
+    const after  = (u.size || "") + "|" + (u.note || e.note || "") + "|" + cut;
     if (before === after) return;
-    touch(u.key, { size: u.size || "", note: u.note || e.note || "" });
+    touch(u.key, { size: u.size || "", note: u.note || e.note || "", cut });
     changed++;
   });
   closeModal("importOverlay");
   scheduleFlush(0); renderAll();
   toast(changed ? `Updated ${changed} ${changed === 1 ? "person" : "people"}.` : "Nothing changed — sizes already matched.");
+}
+
+/* Men / male / M / mens all land on "M"; anything unrecognised clears. */
+function canonCut(v){
+  const t = String(v || "").trim().toUpperCase().replace(/[^A-Z]/g, "");
+  if (!t) return "";
+  if (t[0] === "M") return "M";
+  if (t[0] === "W" || t[0] === "F" || t[0] === "L") return "W";   // women / female / ladies
+  if (t[0] === "U") return "";                                     // unisex = no preference
+  return "";
 }
 
 /* XXL / xx-large / 2xl all land on 2XL. */
